@@ -931,46 +931,63 @@ static DeferredErrorMessage *
 DeferErrorIfUnsupportedSublinkAndReferenceTable(Query *queryTree)
 {
 	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
+	ListCell *rteCell = NULL;
 
 	if (!queryTree->hasSubLinks)
 	{
 		return NULL;
 	}
 
-	if (HasRecurringTuples((Node *) queryTree->rtable, &recurType))
+	foreach(rteCell, queryTree->rtable)
 	{
-		if (recurType == RECURRING_TUPLES_REFERENCE_TABLE)
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rteCell);
+
+		if (rangeTableEntry->rtekind != RTE_RELATION &&
+			rangeTableEntry->rtekind != RTE_SUBQUERY &&
+			rangeTableEntry->rtekind != RTE_FUNCTION)
 		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot pushdown the subquery",
-								 "Reference tables are not allowed in FROM "
-								 "clause when the query has subqueries in "
-								 "WHERE clause", NULL);
+			/* skip over RTE joins and other types */
+			continue;
 		}
-		else if (recurType == RECURRING_TUPLES_FUNCTION)
+
+		if (!HasRecurringTuples((Node *) rangeTableEntry, &recurType))
 		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot pushdown the subquery",
-								 "Functions are not allowed in FROM "
-								 "clause when the query has subqueries in "
-								 "WHERE clause", NULL);
+			/* found a distributed table! */
+			return NULL;
 		}
-		else if (recurType == RECURRING_TUPLES_RESULT_FUNCTION)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+	}
+
+	if (recurType == RECURRING_TUPLES_REFERENCE_TABLE)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "cannot pushdown the subquery",
-								 "Complex subqueries and CTEs are not allowed in "
-								 "the FROM clause when the query has subqueries in the "
-								 "WHERE clause", NULL);
-		}
-		else
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot pushdown the subquery",
-								 "Subqueries without FROM are not allowed in FROM "
-								 "clause when the outer query has subqueries in "
-								 "WHERE clause", NULL);
-		}
+							 "Reference tables are not allowed in FROM "
+							 "clause when the query has subqueries in "
+							 "WHERE clause", NULL);
+	}
+	else if (recurType == RECURRING_TUPLES_FUNCTION)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "Functions are not allowed in FROM "
+							 "clause when the query has subqueries in "
+							 "WHERE clause", NULL);
+	}
+	else if (recurType == RECURRING_TUPLES_RESULT_FUNCTION)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "Complex subqueries and CTEs are not allowed in "
+							 "the FROM clause when the query has subqueries in the "
+							 "WHERE clause", NULL);
+	}
+	else
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "Subqueries without FROM are not allowed in FROM "
+							 "clause when the outer query has subqueries in "
+							 "WHERE clause", NULL);
 	}
 
 	return NULL;
