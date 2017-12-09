@@ -145,7 +145,7 @@ FROM
 -- reset the flag for next query
 SET citus.subquery_pushdown to OFF;
 
--- Check that we error out if the outermost query is a distinct clause.
+-- Check that we support count distinct with a subquery
 
 SELECT
 	count(DISTINCT a)

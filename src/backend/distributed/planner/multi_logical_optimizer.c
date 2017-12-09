@@ -2754,15 +2754,6 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 
 	AggregateType aggregateType = GetAggregateType(aggregateExpression->aggfnoid);
 
-	/* check if logical plan includes a subquery */
-	List *subqueryMultiTableList = SubqueryMultiTableList(logicalPlanNode);
-	if (subqueryMultiTableList != NIL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot push down this subquery"),
-						errdetail("distinct in the outermost query is unsupported")));
-	}
-
 	/*
 	 * We partially support count(distinct) in subqueries, other distinct aggregates in
 	 * subqueries are not supported yet.
